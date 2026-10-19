@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Guest Count Heatmap</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow working column — settings, day picker, day heatmap, week overview, entry form. */
+:root{
+  --bg:#f7f8fa;--panel:#ffffff;--fg:#14202e;--muted:#5d6b7b;--line:#dde3ea;--accent:#185fa5;--accent-ink:#ffffff;
+  --h0:#e6f1fb;--h0t:#0c447c;--h1:#b5d4f4;--h1t:#0c447c;--h2:#85b7eb;--h2t:#042c53;--h3:#378add;--h3t:#042c53;--h4:#185fa5;--h4t:#e6f1fb;--h5:#0c447c;--h5t:#e6f1fb;
+  --wait:#fcebeb;--wait-ink:#791f1f;--warnbg:#faeeda;--warnink:#633806;--bad:#a32d2d;--ok:#3b6d11;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10161d;--panel:#18212b;--fg:#e8edf2;--muted:#9aa8b6;--line:#2a3542;--accent:#5a9fe0;--accent-ink:#0b1622;--wait:#4a1b1b;--wait-ink:#f7c1c1;--warnbg:#4a3410;--warnink:#fac775;--bad:#f09595;--ok:#97c459;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10161d;--panel:#18212b;--fg:#e8edf2;--muted:#9aa8b6;--line:#2a3542;--accent:#5a9fe0;--accent-ink:#0b1622;--wait:#4a1b1b;--wait-ink:#f7c1c1;--warnbg:#4a3410;--warnink:#fac775;--bad:#f09595;--ok:#97c459;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input,select{font:inherit;font-size:15px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.small{width:84px}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.days button{font:inherit;font-size:13px;font-weight:500;padding:8px 0;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.days button small{font-size:11px;color:var(--muted);font-weight:400}
+.days button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.days button[aria-pressed="true"] small{color:var(--accent-ink)}
+.scroll{overflow-x:auto;margin:0 -2px}
+table{border-collapse:separate;border-spacing:3px;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-weight:500;font-size:11px;color:var(--muted);padding:4px 2px;text-align:center;line-height:1.2;white-space:nowrap}
+th.h,td.h{text-align:left;white-space:nowrap;font-size:12px;color:var(--muted);padding-right:6px}
+td.c{text-align:center;padding:8px 4px;min-width:40px;border-radius:5px;font-family:var(--mono);font-weight:500}
+td.tot{text-align:center;font-family:var(--mono);font-weight:500;padding:6px 4px}
+th button.date{font:inherit;font-size:11px;color:var(--accent);background:none;border:0;cursor:pointer;text-decoration:underline;padding:2px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--muted);align-items:center}
+.ramp{display:inline-flex;height:10px;width:96px;border-radius:3px;overflow:hidden;vertical-align:middle;margin:0 6px}
+.ramp i{flex:1}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--wait);border:1px solid var(--wait-ink);vertical-align:middle;margin-right:5px}
+.hours{display:block}
+.hours label{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--fg)}
+.hours input{width:76px;text-align:right}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button.pri,button.sec,button.dan{font:inherit;font-size:14px;font-weight:500;border-radius:8px;padding:9px 14px;cursor:pointer;border:1px solid var(--accent)}
+button.pri{background:var(--accent);color:var(--accent-ink)}
+button.sec{background:transparent;color:var(--accent)}
+button.dan{background:transparent;color:var(--bad);border-color:var(--bad)}
+.msg{font-size:13px;min-height:1em}
+.msg.err{color:var(--bad)}.msg.ok{color:var(--ok)}
+.notes{font-size:12px;color:var(--muted);margin:0;padding-left:18px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (min-width:640px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.kpi{background:var(--bg);border-radius:8px;padding:10px}
+.kpi b{display:block;font-family:var(--mono);font-size:20px;font-weight:500}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.red b{color:var(--bad)}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+header{display:flex;flex-direction:column;gap:6px}
+.seg{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:6px}
+.seg button{font:inherit;font-size:14px;font-weight:500;padding:8px 16px;border:0;background:var(--panel);color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.gr{display:grid;grid-template-columns:56px repeat(7,minmax(52px,1fr));gap:2px;font-size:12px;min-width:480px;font-variant-numeric:tabular-nums}
+.gr .hh{color:var(--muted);text-align:center;padding:4px 0;font-weight:500}
+.gr .hl{text-align:right;padding-right:8px;line-height:34px;color:var(--muted)}
+.gr .cc{height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:4px;cursor:default;line-height:1.1}
+.gr .cc small{font-size:9px;opacity:.85}
+.gr .dd{font-weight:500;color:var(--fg);border-top:1px solid var(--line);padding-top:8px;text-align:center}
+.gr .hl.dd{text-align:right}
+.rlg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.rlg i{width:18px;height:10px;border-radius:2px;display:inline-block}
+.rdet{font-size:13px;color:var(--muted);min-height:40px}
+.rst{font-size:13px;color:var(--muted);padding-top:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.rst b{color:var(--fg);font-weight:500}
+.rtabs{display:flex;flex-wrap:wrap;gap:6px}
+.rtabs button{font:inherit;font-size:13px;font-weight:500;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--fg);cursor:pointer}
+.rtabs button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.rtabs button.nodata{color:var(--muted)}
+.rtabs button[aria-selected="true"].nodata{color:var(--accent-ink)}
+#rkpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:640px){#rkpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+#rkpis .kpi{padding:8px 10px}#rkpis .kpi b{font-size:17px}
+.rcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.rcard h3{margin:0;font-size:16px;font-weight:600}
+.rcard .find{margin:0;font-size:14px}
+.rcard .find b{font-family:var(--mono);font-weight:500}
+.rcard table{width:100%}
+.rcard td.c{min-width:52px}
+@media print{.seg,[data-edit]{display:none!important}.rcard{break-inside:avoid}}
+.crew td{padding:2px}
+.crew input,.crew select{font-size:13px;padding:6px 6px}
+.crew input.nm{width:120px}.crew input.tm{width:92px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--bg);font-variant-numeric:tabular-nums}
+.chip.bad{border-color:var(--bad);color:var(--bad)}.chip.ok{border-color:var(--ok);color:var(--ok)}
+.flag{font-size:13px;color:var(--bad)}
+button.x{font:inherit;font-size:13px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:5px 8px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Guest Count Heatmap</h1>
+    <p class="sub" id="hdrsub">Hourly guest counts (GC) by day, expected GC, waiting list and servers needed. Tap a date to edit it. Changes save in your own browser only.</p>
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="vReport" aria-pressed="true">Report</button>
+      <button type="button" id="vEdit" aria-pressed="false">Edit data</button>
+    </div>
+  </header>
+
+  <section id="report" aria-label="Report" style="display:flex;flex-direction:column;gap:18px">
+    <div class="row" style="align-items:center"><label for="rmetric" style="flex-direction:row;align-items:center;gap:8px;font-size:13px">Metric<select id="rmetric"></select></label></div>
+    <p class="sub" id="rnote" style="margin:-8px 0 0"></p>
+    <div class="scroll"><div id="rg" class="gr"></div></div>
+    <div id="rlg" class="rlg"></div>
+    <div id="rdet" class="rdet">Tap or hover a cell for details.</div>
+    <div id="rst" class="rst"></div>
+    <div class="rcard" id="cmpcard">
+      <h3>Compare</h3>
+      <div class="row">
+        <label for="cmode">Compare<select id="cmode"><option value="day">Day vs day</option><option value="week">Week vs week</option><option value="month">Month vs month</option></select></label>
+        <label for="cA">From<select id="cA"></select></label>
+        <label for="cB">To<select id="cB"></select></label>
+      </div>
+      <p class="find" id="cfind"></p>
+      <div class="scroll"><table id="ctbl"></table></div>
+      <p class="sub" id="cnote" style="margin:0"></p>
+    </div>
+  </section>
+
+  <section data-edit class="panel" aria-label="Settings">
+    <div class="row">
+      <label for="std">Guests per server<input id="std" class="small" type="number" min="1" step="1" value="15"></label>
+      <label for="dine">Dine time (hrs)<input id="dine" class="small" type="number" min="0.25" step="0.25" value="1"></label>
+      <span class="msg" id="setmsg"></span>
+    </div>
+    <div class="row">
+      <label for="seatMain">Area 1 seats<input id="seatMain" class="small" type="number" min="0" step="1" value="38"></label>
+      <label for="seatMall">Area 2 seats<input id="seatMall" class="small" type="number" min="0" step="1" value="10"></label>
+      <label for="seatGarden">Area 3 seats<input id="seatGarden" class="small" type="number" min="0" step="1" value="32"></label>
+      <span class="sub" style="padding-bottom:8px">Total <b id="seatTotal" style="font-family:var(--mono)">80</b> seats</span>
+    </div>
+    <div class="row">
+      <label for="sqm">Floor area (sqm)<input id="sqm" class="small" type="number" min="0" step="0.01" placeholder="e.g. 125"></label>
+      <label for="rent">Rent per sqm / month (₱)<input id="rent" class="small" type="number" min="0" step="1" placeholder="e.g. 3300"></label>
+      <span class="sub" style="padding-bottom:8px">Monthly rent <b id="rentTotal" style="font-family:var(--mono)">–</b></span>
+    </div>
+  </section>
+
+  <div data-edit class="row" aria-label="Heatmap view">
+    <label for="metric">Metric<select id="metric">
+      <option value="gc">Guest count (pax)</option>
+      <option value="sales">Est. sales (₱)</option>
+      <option value="seat">Sales per seat (₱)</option>
+      <option value="turn">Turnover (guests ÷ seats)</option>
+      <option value="seatuse">Seats used (%)</option>
+      <option value="srv">Servers needed</option>
+    </select></label>
+  </div>
+  <nav data-edit class="days" id="days" aria-label="Day of week"></nav>
+
+  <section data-edit class="panel" aria-labelledby="dayttl">
+    <h2 id="dayttl">Saturday</h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="scroll"><table id="daytbl"></table></div>
+    <ul class="notes" id="notes"></ul>
+    <div class="legend">
+      <span>Fewer<span class="ramp"><i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><i style="background:var(--h5)"></i></span>More guests</span>
+      <span><span class="sw"></span>Waited · left · 90%+ seats</span><span><span class="sw" style="background:var(--warnbg);border-color:var(--warnink)"></span>70–89% seats</span>
+    </div>
+    <p class="sub">Expected = average of the logged dates + guests who walked out at that hour, averaged. Est. sales = guests × that day's average check from the latest month. Totals for servers and seats used show the peak. Servers = expected GC × dine time ÷ guests per server, rounded up. Seats used = expected GC × dine time ÷ total seats.</p>
+  </section>
+
+  <section data-edit class="panel" aria-labelledby="weekttl">
+    <h2 id="weekttl">Whole week — expected GC</h2>
+    <div class="scroll"><table id="weektbl"></table></div>
+    <p class="sub">Tap a day to open it. Blank days have no data yet.</p>
+  </section>
+
+  <section data-edit class="panel" aria-labelledby="depttl">
+    <h2 id="depttl">Deployment</h2>
+    <div class="row">
+      <label for="ddate">Date<input id="ddate" type="date"></label>
+      <span class="msg" id="dday"></span>
+    </div>
+    <div class="kpis" id="dkpis"></div>
+    <p class="sub" id="dsrc"></p>
+    <div class="scroll"><table id="crew" class="crew"></table></div>
+    <div class="btns">
+      <button class="sec" type="button" id="addstaff">Add staff</button>
+      <button class="sec" type="button" id="copylast">Copy last same day</button>
+      <button class="pri" type="button" id="savedep">Save deployment</button>
+    </div>
+    <div id="dsum" style="display:flex;flex-direction:column;gap:8px"></div>
+    <p class="msg" id="dmsg" role="status"></p>
+    <p class="sub">Effective servers: regular and probationary servers count as 1, trainees as 0.5. Probationary staff and trainees need a regular buddy.</p>
+  </section>
+
+  <section data-edit class="panel" aria-labelledby="monttl">
+    <h2 id="monttl">Monthly averages by day</h2>
+    <div class="row">
+      <label for="msel">Month<select id="msel"></select></label>
+      <label for="mcmp">Compare with<select id="mcmp"></select></label>
+    </div>
+    <div class="scroll"><table id="montbl"></table></div>
+    <p class="sub" id="monnote">Avg check = average sales ÷ average guests. Change vs the compared month in small text.</p>
+    <details>
+      <summary style="cursor:pointer;color:var(--accent);font-size:14px;font-weight:500">Edit monthly figures</summary>
+      <form id="mf" novalidate style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+        <label for="mmonth">Month<input id="mmonth" type="month" required></label>
+        <div class="scroll"><table id="mform"></table></div>
+        <p class="sub">Sales in pesos (₱). Sales contri = the two % parts from your log (e.g. 24 and 76).</p>
+        <div class="btns"><button class="pri" type="submit" id="msave">Save month</button></div>
+        <p class="msg" id="mmsg" role="status"></p>
+      </form>
+    </details>
+  </section>
+
+  <section data-edit class="panel" aria-labelledby="formttl">
+    <h2 id="formttl">Add a day</h2>
+    <form id="f" novalidate>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="row">
+          <label for="fdate">Date<input id="fdate" type="date" required></label>
+          <span class="msg" id="fday"></span>
+        </div>
+        <div class="hours" id="fhours"></div>
+        <h2 style="font-size:14px">Waiting list (leave blank if none)</h2>
+        <div class="row">
+          <label for="wh">Hour wait started<select id="wh"></select></label>
+          <label for="wp">Parties waited<input id="wp" class="small" type="number" min="0" step="1"></label>
+          <label for="wg">Guests waited<input id="wg" class="small" type="number" min="0" step="1"></label>
+          <label for="ws">Parties seated<input id="ws" class="small" type="number" min="0" step="1"></label>
+        </div>
+        <label for="fnote">Note<input id="fnote" type="text" maxlength="160" placeholder="e.g. mass ended 7pm, 2 trainees on floor"></label>
+        <div class="btns">
+          <button class="pri" type="submit" id="save">Save day</button>
+          <button class="sec" type="button" id="clear">Clear form</button>
+          <button class="dan" type="button" id="del" hidden>Delete this date</button>
+          <button class="dan" type="button" id="delyes" hidden>Yes, delete</button>
+        </div>
+        <p class="msg" id="fmsg" role="status"></p>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+const HOURS=["10-11 AM","11-12 NN","12-1 PM","1-2 PM","2-3 PM","3-4 PM","4-5 PM","5-6 PM","6-7 PM","7-8 PM","8-9 PM","9-10 PM"];
+const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const $=id=>document.getElementById(id);
+let entries={}, settings={std:15,dine:1,seats:{main:38,mall:10,garden:32},sqm:null,rent:null}, day="Saturday", db=null, editing=null, saved=true;
+
+function dayOf(iso){const d=new Date(iso+"T00:00:00");if(isNaN(d))return null;return DAYS[(d.getDay()+6)%7];}
+function fmtDate(iso){const d=new Date(iso+"T00:00:00");return d.toLocaleDateString("en-US",{month:"short",day:"numeric"});}
+function num(v){return typeof v==="number"&&isFinite(v)?v:null;}
+function lost(e){const p=num(e.wParties),s=num(e.wSeated),g=num(e.wGuests);if(p==null||s==null||g==null||p<=0)return 0;return Math.max(0,p-s)*(g/p);}
+function shade(v,max){if(v==null)return null;const r=max>0?v/max:0;const i=r<.15?0:r<.35?1:r<.55?2:r<.75?3:r<.9?4:5;return [`var(--h${i})`,`var(--h${i}t)`];}
+
+function stats(d){
+  const list=Object.values(entries).filter(e=>dayOf(e.date)===d).sort((a,b)=>a.date.localeCompare(b.date));
+  const n=list.length;
+  const exp=HOURS.map((_,i)=>{const vals=list.map(e=>num(e.gc?.[i])).filter(v=>v!=null);if(!vals.length)return null;
+    const avg=vals.reduce((s,v)=>s+v,0)/vals.length;const l=list.reduce((s,e)=>s+(e.wHour===i?lost(e):0),0)/n;return Math.round(avg+l);});
+  const waited=HOURS.map((_,i)=>list.reduce((s,e)=>s+(e.wHour===i?(num(e.wGuests)||0):0),0));
+  const left=HOURS.map((_,i)=>Math.round(list.reduce((s,e)=>s+(e.wHour===i?lost(e):0),0)));
+  const av=key=>HOURS.map((_,i)=>{const v=list.map(e=>num(e[key]?.[i])).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;});
+  return {list,exp,waited,left,tc:av("tc"),sl:av("sales")};
+}
+function seatTotal(){const t=settings.seats||{};return (t.main||0)+(t.mall||0)+(t.garden||0);}
+function seatUse(v){const t=seatTotal();if(v==null||!t)return null;return Math.round(v*(settings.dine||1)/t*100);}
+function seatCell(p){if(p==null)return '<td class="c" style="color:var(--muted)">–</td>';const st=p>=90?"background:var(--wait);color:var(--wait-ink)":p>=70?"background:var(--warnbg);color:var(--warnink)":"color:var(--fg)";return `<td class="c" style="${st}">${p}%</td>`;}
+function servers(v){if(v==null)return "";return Math.ceil(v*(settings.dine||1)/(settings.std||15));}
+
+function metric(){const el=$("metric");return el?el.value:"gc";}
+const MLAB={gc:"GC",sales:"sales",seat:"sales/seat",turn:"turnover",seatuse:"seats used",srv:"servers"};
+function dayCheck(d){const m=monthFor(d);return m&&num(m.o.sales)&&m.o.gc?m.o.sales/m.o.gc:null;}
+function salesAt(d,i,v){const st=stats(d);if(st.sl[i]!=null)return st.sl[i];const c=dayCheck(d);return v!=null&&c!=null?v*c:null;}
+function M(v,d,k){if(v==null)return null;k=k||metric();const S=seatTotal();
+  if(k==="gc")return v;
+  if(k==="srv")return servers(v);
+  if(k==="seatuse")return seatUse(v);
+  if(k==="turn")return S?v/S:null;
+  const c=dayCheck(d||day);if(c==null)return null;const sl=v*c;return k==="sales"?sl:(S?sl/S:null);}
+function fmtM(x,k){if(x==null)return "–";k=k||metric();
+  if(k==="sales")return x>=1000?"₱"+(x/1000).toFixed(1)+"k":"₱"+Math.round(x);
+  if(k==="seat")return "₱"+Math.round(x);
+  if(k==="turn")return x.toFixed(2);
+  if(k==="seatuse")return Math.round(x)+"%";
+  return String(Math.round(x));}
+function aggM(arr,k){const v=arr.filter(x=>x!=null);if(!v.length)return null;k=k||metric();
+  if(k==="srv"||k==="seatuse")return Math.max(...v);return v.reduce((a,b)=>a+b,0);}
+function tdm(x,max){const c=shade(x,max);if(!c)return '<td class="c" style="color:var(--muted)">–</td>';return `<td class="c" style="background:${c[0]};color:${c[1]}">${fmtM(x)}</td>`;}
+function td(v,max){const c=shade(v,max);if(!c)return '<td class="c" style="color:var(--muted)">–</td>';return `<td class="c" style="background:${c[0]};color:${c[1]}">${v}</td>`;}
+
+function renderDays(){
+  $("days").innerHTML="";
+  DAYS.forEach(d=>{const b=document.createElement("button");b.type="button";const n=Object.values(entries).filter(e=>dayOf(e.date)===d).length;
+    b.setAttribute("aria-pressed",d===day);b.innerHTML=`${d.slice(0,3)}<small>${n?n+" day"+(n>1?"s":""):"–"}</small>`;b.onclick=()=>{day=d;const nd=upcoming(d);if(nd){dDate=nd;$("ddate").value=nd;crew=JSON.parse(JSON.stringify(deploys[nd]?.staff||[]));renderCrew();}render();};$("days").appendChild(b);});
+}
+
+function renderDay(){
+  $("dayttl").textContent=day;
+  const {list,exp,waited,left}=stats(day);
+  const tbl=$("daytbl");
+  if(!list.length){tbl.innerHTML="";$("kpis").innerHTML="";$("notes").innerHTML=`<li class="empty" style="list-style:none;margin-left:-18px">No ${day} data yet. Add one with the form below.</li>`;return;}
+  const max=Math.max(1e-9,...list.flatMap(e=>(e.gc||[]).map(v=>M(num(v)))).filter(v=>v!=null),...exp.map(v=>M(v)).filter(v=>v!=null));
+  let h='<thead><tr><th class="h">Hour</th>';
+  list.forEach(e=>{h+=`<th><button class="date" type="button" data-date="${e.date}" aria-label="Edit ${fmtDate(e.date)}">${fmtDate(e.date)}</button></th>`;});
+  h+='<th>Expected<br>'+MLAB[metric()]+'</th><th>Waiting<br>list</th><th>Servers</th><th>Seats<br>used</th></tr></thead><tbody>';
+  HOURS.forEach((hr,i)=>{h+=`<tr><td class="h">${hr}</td>`;list.forEach(e=>{h+=tdm(M(num(e.gc?.[i])),max);});h+=tdm(M(exp[i]),max);
+    h+=waited[i]?`<td class="c" style="background:var(--wait);color:var(--wait-ink);line-height:1.15">${waited[i]}<br><span style="font-size:10px;font-weight:400">${left[i]} left</span></td>`:'<td class="c" style="color:var(--muted)">–</td>';
+    h+=`<td class="tot">${servers(exp[i])}</td>${seatCell(seatUse(exp[i]))}</tr>`;});
+  h+='<tr><td class="h" style="color:var(--fg);font-weight:500">Total</td>';
+  list.forEach(e=>{h+=`<td class="tot">${fmtM(aggM((e.gc||[]).map(v=>M(num(v)))))}</td>`;});
+  const et=fmtM(aggM(exp.map(v=>M(v))));const wt=waited.reduce((s,v)=>s+v,0);
+  h+=`<td class="tot">${et}</td><td class="tot" style="color:var(--bad)">${wt||""}</td><td></td><td></td></tr></tbody>`;
+  tbl.innerHTML=h;
+  tbl.querySelectorAll("button.date").forEach(b=>b.onclick=()=>loadForm(b.dataset.date));
+  const pk=exp.reduce((bi,v,i)=>v!=null&&(bi<0||v>exp[bi])?i:bi,-1);
+  const lt=left.reduce((s,v)=>s+v,0);
+  $("kpis").innerHTML=`<div class="kpi"><b>${pk>=0?HOURS[pk]:"–"}</b><span>Peak hour (${pk>=0?exp[pk]:0} expected GC)</span></div><div class="kpi"><b>${pk>=0?servers(exp[pk]):"–"}</b><span>Servers needed at peak</span></div><div class="kpi"><b>${pk>=0&&seatUse(exp[pk])!=null?seatUse(exp[pk])+"%":"–"}</b><span>Seats used at peak (of ${seatTotal()})</span></div><div class="kpi"><b>${pk>=0?Math.max(0,seatTotal()-Math.round(exp[pk]*(settings.dine||1))):"–"}</b><span>Seats free at peak</span></div><div class="kpi"><b>${wt}</b><span>Guests who waited (all dates)</span></div><div class="kpi red"><b>${lt}</b><span>Guests who walked out</span></div>`;
+  const ns=list.filter(e=>e.note).map(e=>`<li>${fmtDate(e.date)}: <span></span></li>`);
+  $("notes").innerHTML=ns.join("");
+  const spans=$("notes").querySelectorAll("li span");let k=0;list.filter(e=>e.note).forEach(e=>{spans[k++].textContent=e.note;});
+}
+
+function renderWeek(){
+  const all=DAYS.map(d=>stats(d).exp.map(v=>M(v,d)));
+  const max=Math.max(1e-9,...all.flat().filter(v=>v!=null));
+  $("weekttl").textContent="Whole week — expected "+MLAB[metric()];
+  let h='<thead><tr><th class="h">Hour</th>'+DAYS.map(d=>`<th><button class="date" type="button" data-day="${d}">${d.slice(0,3)}</button></th>`).join("")+'</tr></thead><tbody>';
+  HOURS.forEach((hr,i)=>{h+=`<tr><td class="h">${hr}</td>`+all.map(col=>tdm(col[i],max)).join("")+'</tr>';});
+  h+='<tr><td class="h" style="color:var(--fg);font-weight:500">Total</td>'+all.map(col=>{const a=aggM(col);return `<td class="tot">${a==null?"":fmtM(a)}</td>`;}).join("")+'</tr></tbody>';
+  $("weektbl").innerHTML=h;
+  $("weektbl").querySelectorAll("button.date").forEach(b=>b.onclick=()=>{day=b.dataset.day;render();$("dayttl").scrollIntoView({behavior:"smooth",block:"start"});});
+}
+let months={};
+const peso=v=>v==null?"–":"₱"+Math.round(v).toLocaleString("en-US");
+function mLabel(k){const [y,m]=k.split("-");return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"long",year:"numeric"});}
+function chg(a,b){if(a==null||b==null||!b)return "";const p=Math.round((a-b)/b*100);return `<br><span style="font-size:10px;font-weight:400;color:${p<0?"var(--bad)":"var(--ok)"}">${p>0?"+":""}${p}%</span>`;}
+function renderMonths(){
+  const keys=Object.keys(months).sort().reverse();
+  const ms=$("msel"),mc=$("mcmp");const cur=ms.value,cc=mc.value;
+  ms.innerHTML=keys.map(k=>`<option value="${k}">${mLabel(k)}</option>`).join("")||'<option value="">No months yet</option>';
+  mc.innerHTML='<option value="">None</option>'+keys.map(k=>`<option value="${k}">${mLabel(k)}</option>`).join("");
+  if(keys.includes(cur))ms.value=cur;
+  if(cc!==""&&keys.includes(cc))mc.value=cc;else if(cc===""&&mc.dataset.touched)mc.value="";else mc.value=keys.find(k=>k<ms.value)||"";
+  const m=months[ms.value],c=months[mc.value];const tbl=$("montbl");
+  if(!m){tbl.innerHTML='<tbody><tr><td class="empty">No monthly figures yet. Open "Edit monthly figures" to add them.</td></tr></tbody>';return;}
+  const g=d=>m.days?.[d]||{},gc=d=>(c&&c.days?.[d])||{};
+  const maxS=Math.max(1,...DAYS.map(d=>num(g(d).sales)||0)),maxG=Math.max(1,...DAYS.map(d=>num(g(d).gc)||0));
+  const chk=o=>num(o.sales)!=null&&num(o.gc)?o.sales/o.gc:null;
+  const maxC=Math.max(1,...DAYS.map(d=>chk(g(d))||0));
+  let h='<thead><tr><th class="h">Day</th><th>Avg sales</th><th>Avg GC</th><th>Avg check</th><th>Sales<br>contri %</th></tr></thead><tbody>';
+  let ts=0,tg=0;
+  DAYS.forEach(d=>{const o=g(d),p=gc(d);const s=num(o.sales),n=num(o.gc),k=chk(o);if(s)ts+=s;if(n)tg+=n;
+    const cs=shade(s,maxS),cg=shade(n,maxG),ck=k!=null?shade(k,maxC):null;
+    const cell=(v,col,txt)=>col?`<td class="c" style="background:${col[0]};color:${col[1]};line-height:1.15">${txt}</td>`:'<td class="c" style="color:var(--muted)">–</td>';
+    h+=`<tr><td class="h">${d.slice(0,3)}</td>${cell(s,cs,(s>=1000?"₱"+Math.round(s/1000)+"k":peso(s))+chg(s,num(p.sales)))}${cell(n,cg,n+chg(n,num(p.gc)))}${cell(k,ck,peso(k)+chg(k,chk(p)))}<td class="tot">${num(o.c1)!=null?o.c1+" / "+(o.c2??""):"–"}</td></tr>`;});
+  h+=`<tr><td class="h" style="color:var(--fg);font-weight:500">Week</td><td class="tot">${ts?"₱"+Math.round(ts/1000)+"k":"–"}</td><td class="tot">${tg||"–"}</td><td class="tot">${ts&&tg?peso(ts/tg):"–"}</td><td></td></tr></tbody>`;
+  tbl.innerHTML=h;
+  $("monnote").textContent="Avg check = average sales ÷ average guests."+(c?" Small % = change vs "+mLabel(mc.value)+".":"")+(m.note?" Note: "+m.note:"");
+}
+function buildMonthForm(){
+  $("mform").innerHTML='<thead><tr><th class="h">Day</th><th>Avg sales ₱</th><th>Avg GC</th><th>Contri 1</th><th>Contri 2</th></tr></thead><tbody>'+
+    DAYS.map((d,i)=>`<tr><td class="h">${d.slice(0,3)}</td><td><input id="ms${i}" type="number" min="0" step="1" style="width:100px" aria-label="${d} average sales"></td><td><input id="mg${i}" type="number" min="0" step="1" style="width:70px" aria-label="${d} average guests"></td><td><input id="m1${i}" type="number" min="0" max="100" step="1" style="width:56px" aria-label="${d} sales contri part 1"></td><td><input id="m2${i}" type="number" min="0" max="100" step="1" style="width:56px" aria-label="${d} sales contri part 2"></td></tr>`).join("")+'</tbody>';
+}
+function loadMonth(k){const m=months[k];DAYS.forEach((d,i)=>{const o=m?.days?.[d]||{};$("ms"+i).value=o.sales??"";$("mg"+i).value=o.gc??"";$("m1"+i).value=o.c1??"";$("m2"+i).value=o.c2??"";});}
+$("msel").addEventListener("change",renderMonths);
+$("metric").addEventListener("change",()=>{renderDay();renderWeek();});
+$("mcmp").addEventListener("change",()=>{$("mcmp").dataset.touched="1";renderMonths();});
+$("mmonth").addEventListener("input",()=>{if(/^\d{4}-\d{2}$/.test($("mmonth").value))loadMonth($("mmonth").value);});
+$("mf").addEventListener("submit",async ev=>{ev.preventDefault();const msg=$("mmsg");msg.className="msg err";
+  const k=$("mmonth").value;if(!/^\d{4}-\d{2}$/.test(k)){msg.textContent="Pick a month first.";return;}
+  const days={};let bad=false;
+  DAYS.forEach((d,i)=>{const o={sales:readNum("ms"+i),gc:readNum("mg"+i),c1:readNum("m1"+i),c2:readNum("m2"+i)};if(Object.values(o).some(v=>Number.isNaN(v)))bad=true;days[d]=o;});
+  if(bad){msg.textContent="Use whole numbers, 0 or more.";return;}
+  const body={month:k,days,note:months[k]?.note||""};
+  $("msave").disabled=true;
+  try{if(db)await db.collection("months").doc(k).set(body);months[k]=body;$("msel").innerHTML=`<option value="${k}">${mLabel(k)}</option>`;$("msel").value=k;renderMonths();msg.className="msg ok";msg.textContent=db?"Saved "+mLabel(k)+".":"Added for this visit only.";}
+  catch(e){msg.textContent="Couldn't save. Check your connection and try again.";}
+  finally{$("msave").disabled=false;}});
+
+const POS=["Server","Cashier","Counter","MOD","SIC","Host","Bar","Busser"];
+const STAT=["Regular","Probationary","Trainee"];
+const AREAS=["Area 1","Area 2","Area 3","All areas"];
+let deploys={}, crew=[], dDate="";
+
+function isoLocal(x){const m=String(x.getMonth()+1).padStart(2,"0"),dd=String(x.getDate()).padStart(2,"0");return `${x.getFullYear()}-${m}-${dd}`;}
+function upcoming(d){const t=new Date();for(let i=0;i<7;i++){const x=new Date(t.getFullYear(),t.getMonth(),t.getDate()+i);if(DAYS[(x.getDay()+6)%7]===d)return isoLocal(x);}return "";}
+function monthFor(d){const ks=Object.keys(months).sort().reverse();for(const k of ks){const o=months[k].days?.[d];if(o&&num(o.gc))return {k,o};}return null;}
+function forecast(d){const st=stats(d);const hourly=st.exp.filter(v=>v!=null);const hSum=hourly.length?hourly.reduce((a,b)=>a+b,0):null;
+  const m=monthFor(d);const gc=m?m.o.gc:hSum;const check=m&&num(m.o.sales)&&m.o.gc?m.o.sales/m.o.gc:null;
+  const sales=m&&num(m.o.sales)?m.o.sales:(gc!=null&&check?gc*check:null);
+  const pk=st.exp.reduce((bi,v,i)=>v!=null&&(bi<0||v>st.exp[bi])?i:bi,-1);
+  return {gc,sales,check,src:m?mLabel(m.k)+" average":hSum!=null?"hourly log":null,pk,pkv:pk>=0?st.exp[pk]:null,hSum};}
+function blankStaff(){return {name:"",pos:"Server",status:"Regular",buddy:"",area:"Area 1",start:"",end:""};}
+function opt(list,v){return list.map(x=>`<option${x===v?" selected":""}>${x}</option>`).join("");}
+function renderCrew(){
+  const regs=crew.filter(c=>c.status==="Regular"&&c.name.trim()).map(c=>c.name.trim());
+  let h='<thead><tr><th class="h">Name</th><th>Position</th><th>Status</th><th>Buddy</th><th>Area</th><th>Start</th><th>End</th><th></th></tr></thead><tbody>';
+  crew.forEach((c,i)=>{const needs=c.status!=="Regular";
+    const bOpts='<option value="">'+(needs?"Pick buddy":"—")+'</option>'+regs.filter(n=>n!==c.name.trim()).map(n=>`<option${n===c.buddy?" selected":""}>${n}</option>`).join("");
+    const miss=needs&&(!c.buddy||!regs.includes(c.buddy));
+    h+=`<tr><td><input class="nm" id="cn${i}" data-i="${i}" data-k="name" type="text" placeholder="Name" aria-label="Staff name"></td>
+    <td><select id="cp${i}" data-i="${i}" data-k="pos" aria-label="Position">${opt(POS,c.pos)}</select></td>
+    <td><select id="cs${i}" data-i="${i}" data-k="status" aria-label="Status">${opt(STAT,c.status)}</select></td>
+    <td><select id="cb${i}" data-i="${i}" data-k="buddy" aria-label="Buddy" ${needs?"":"disabled"} style="${miss?"border-color:var(--bad);color:var(--bad)":""}">${bOpts}</select></td>
+    <td><select id="ca${i}" data-i="${i}" data-k="area" aria-label="Area">${opt(AREAS,c.area)}</select></td>
+    <td><input class="tm" id="ct${i}" data-i="${i}" data-k="start" type="time" aria-label="Start"></td>
+    <td><input class="tm" id="ce${i}" data-i="${i}" data-k="end" type="time" aria-label="End"></td>
+    <td><button class="x" type="button" data-rm="${i}" aria-label="Remove">Remove</button></td></tr>`;});
+  if(!crew.length)h+='<tr><td class="empty" colspan="8">No staff yet for this date. Tap Add staff or Copy last same day.</td></tr>';
+  $("crew").innerHTML=h+'</tbody>';
+  crew.forEach((c,i)=>{$("cn"+i).value=c.name;$("ct"+i).value=c.start||"";$("ce"+i).value=c.end||"";});
+  $("crew").querySelectorAll("[data-k]").forEach(el=>{
+    el.addEventListener("input",()=>{const c=crew[+el.dataset.i];c[el.dataset.k]=el.value;if(el.dataset.k==="status"&&el.value==="Regular")c.buddy="";if(el.tagName==="SELECT")renderCrew();else renderSummary();});
+    if(el.dataset.k==="name")el.addEventListener("change",renderCrew);});
+  $("crew").querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{crew.splice(+b.dataset.rm,1);renderCrew();});
+  renderSummary();}
+function renderSummary(){
+  const d=dayOf(dDate);if(!d){$("dsum").innerHTML="";return;}
+  const f=forecast(d);const need=f.pkv!=null?servers(f.pkv):null;
+  const sv=crew.filter(c=>c.pos==="Server");const eff=sv.reduce((a,c)=>a+(c.status==="Trainee"?0.5:1),0);
+  const counts=POS.map(p=>{const n=crew.filter(c=>c.pos===p).length;return `<span class="chip">${p} ${n}</span>`;}).join("");
+  const regs=crew.filter(c=>c.status==="Regular"&&c.name.trim()).map(c=>c.name.trim());
+  const flags=[];
+  crew.forEach(c=>{if(c.status!=="Regular"&&(!c.buddy||!regs.includes(c.buddy)))flags.push(`${c.name.trim()||"Unnamed "+c.pos} (${c.status.toLowerCase()}) needs a regular buddy.`);});
+  const load={};crew.forEach(c=>{if(c.buddy&&c.status!=="Regular")load[c.buddy]=(load[c.buddy]||0)+1;});
+  Object.entries(load).forEach(([n,k])=>{if(k>2)flags.push(`${n} is buddy to ${k} people. Keep it to 2 or fewer.`);});
+  if(need!=null&&eff<need)flags.push(`Servers short at peak: ${eff} effective vs ${need} needed (${HOURS[f.pk]}).`);
+  const svChip=need!=null?`<span class="chip ${eff>=need?"ok":"bad"}">Servers ${eff} effective / ${need} needed at peak</span>`:"";
+  $("dsum").innerHTML=`<div class="chips">${svChip}${counts}</div>`+(flags.length?flags.map(()=>'<div class="flag"></div>').join(""):'<div class="sub" style="color:var(--ok)">No buddy or coverage issues.</div>');
+  $("dsum").querySelectorAll(".flag").forEach((el,i)=>el.textContent="⚠ "+flags[i]);}
+function renderDeploy(){
+  if(!dDate){dDate=upcoming(day);$("ddate").value=dDate;}
+  const d=dayOf(dDate);$("dday").textContent=d||"";if(!d){$("dkpis").innerHTML="";return;}
+  const f=forecast(d);
+  const su=f.pkv!=null?seatUse(f.pkv):null;
+  $("dkpis").innerHTML=`<div class="kpi"><b>${f.gc!=null?Math.round(f.gc).toLocaleString("en-US"):"–"}</b><span>Expected guest count</span></div>
+   <div class="kpi"><b>${f.sales!=null?"₱"+Math.round(f.sales).toLocaleString("en-US"):"–"}</b><span>Expected sales</span></div>
+   <div class="kpi"><b>${f.check!=null?"₱"+Math.round(f.check):"–"}</b><span>Avg check per guest</span></div>
+   <div class="kpi"><b>${f.pk>=0?HOURS[f.pk]:"–"}</b><span>Peak hour (${f.pkv??"–"} expected GC)</span></div>
+   <div class="kpi"><b>${f.pkv!=null?servers(f.pkv):"–"}</b><span>Servers needed at peak</span></div>
+   <div class="kpi"><b>${su!=null?su+"%":"–"}</b><span>Seats used at peak (of ${seatTotal()})</span></div>`;
+  $("dsrc").textContent=f.src?`Guest count and sales from ${f.src}. Peak and servers from the ${d} hourly log${f.hSum==null?" (none yet)":""}.`:`No ${d} data yet. Add hourly counts or monthly averages.`;
+  renderSummary();}
+function loadCrew(date){dDate=date;crew=JSON.parse(JSON.stringify(deploys[date]?.staff||[]));renderCrew();renderDeploy();$("dmsg").textContent="";}
+$("ddate").addEventListener("input",()=>{if(dayOf($("ddate").value))loadCrew($("ddate").value);});
+$("addstaff").onclick=()=>{crew.push(blankStaff());renderCrew();$("cn"+(crew.length-1)).focus();};
+$("copylast").onclick=()=>{const d=dayOf(dDate);const prev=Object.keys(deploys).filter(k=>k<dDate&&dayOf(k)===d).sort().pop()||Object.keys(deploys).filter(k=>k!==dDate&&dayOf(k)===d).sort().pop();
+  const m=$("dmsg");if(!prev){m.className="msg err";m.textContent="No earlier "+(d||"")+" deployment to copy.";return;}
+  crew=JSON.parse(JSON.stringify(deploys[prev].staff||[]));renderCrew();m.className="msg ok";m.textContent="Copied from "+fmtDate(prev)+". Save to keep it.";};
+$("savedep").onclick=async()=>{const m=$("dmsg");m.className="msg err";
+  if(!dayOf(dDate)){m.textContent="Pick a date first.";return;}
+  if(crew.some(c=>!c.name.trim())){m.textContent="Every staff row needs a name.";return;}
+  const body={date:dDate,staff:crew.map(c=>({name:c.name.trim(),pos:c.pos,status:c.status,buddy:c.status==="Regular"?"":c.buddy,area:c.area,start:c.start||"",end:c.end||""}))};
+  $("savedep").disabled=true;
+  try{if(db)await db.collection("deploy").doc(dDate).set(body);deploys[dDate]=body;m.className="msg ok";m.textContent=(db?"Saved deployment for ":"Added for this visit only: ")+fmtDate(dDate)+".";}
+  catch(e){m.textContent="Couldn't save. Check your connection and try again.";}
+  finally{$("savedep").disabled=false;}};
+
+const RCATS=[
+ {k:"gc",t:"Guest count",s:"Expected guests per hour.",u:"guests",ramp:"blue"},
+ {k:"sales",t:"Sales",s:"Logged hourly sales when entered; otherwise guests × that day's average check from the latest month.",u:"",ramp:"blue"},
+ {k:"seat",t:"Sales per seat",s:"Estimated sales ÷ total seats.",u:"per seat",ramp:"blue"},
+ {k:"turn",t:"Seat turnover",s:"Guests ÷ seats each hour. 1.00 means every seat used once.",u:"turns",ramp:"blue"},
+ {k:"seatuse",t:"Seats used",s:"Share of seats taken at once (guests × dine time ÷ seats).",u:"",ramp:"blue"},
+ {k:"srv",t:"Servers needed",s:"Expected guests × dine time ÷ guests per server, rounded up.",u:"servers",ramp:"blue"},
+ {k:"tc",t:"Transactions (TC)",s:"Transactions per hour, from logged TC.",u:"transactions",ramp:"blue"},
+ {k:"apt",t:"Average sale per transaction",s:"Sales ÷ transactions each hour. Uses logged sales, or estimated sales when none are logged.",u:"",ramp:"blue"},
+ {k:"rent",t:"Rent as % of sales",s:"Rent per open hour ÷ that hour's sales. Rent per hour = monthly rent ÷ (12 hours × 30.4 days).",u:"",ramp:"red"},
+ {k:"wait",t:"Waiting list",s:"Guests who waited, all logged dates combined. Small number = walked out.",u:"guests",ramp:"red"}];
+function rshade(x,max,ramp){if(ramp!=="red")return shade(x,max);if(!x)return null;const r=x/max;return r<.34?["var(--wait)","var(--wait-ink)"]:r<.67?["#F09595","#501313"]:["#A32D2D","#FCEBEB"];}
+function setView(v){const rep=v==="report";$("report").hidden=!rep;document.querySelectorAll("[data-edit]").forEach(el=>el.hidden=rep);
+ $("vReport").setAttribute("aria-pressed",rep);$("vEdit").setAttribute("aria-pressed",!rep);
+ $("hdrsub").textContent=rep?"One heatmap per measure, built from your logged dates. Switch to Edit data to add or change numbers.":"Hourly guest counts (GC) by day, expected GC, waiting list and servers needed. Tap a date to edit it.";
+ try{localStorage.setItem("ghm-view",v);}catch(e){}if(rep)renderReport();}
+$("vReport").onclick=()=>setView("report");$("vEdit").onclick=()=>setView("edit");
+function renderReport(){
+  if($("report").hidden)return;
+  const sel=$("rmetric");
+  if(!sel.options.length){sel.innerHTML=RCATS.map(c=>`<option value="${c.k}">${c.t}</option>`).join("");let v="gc";try{v=localStorage.getItem("ghm-cat")||"gc";}catch(e){}if(RCATS.some(c=>c.k===v))sel.value=v;
+    sel.onchange=()=>{try{localStorage.setItem("ghm-cat",sel.value);}catch(e){}renderReport();};}
+  const c=RCATS.find(x=>x.k===sel.value)||RCATS[0];
+  $("rnote").textContent=c.s;
+  const S=DAYS.map(d=>stats(d));const rh=rentHour();const hl=i=>String(10+i).padStart(2,"0")+":00";
+  const colFor=(d,st)=>{
+    if(c.k==="wait")return st.waited.map(v=>v?v:null);
+    if(c.k==="tc")return st.tc;
+    if(c.k==="apt")return st.exp.map((v,i)=>{const t=st.tc[i],sl=salesAt(d,i,v);return t&&sl!=null?sl/t:null;});
+    if(c.k==="rent")return st.exp.map((v,i)=>{const sl=salesAt(d,i,v);return rh!=null&&sl?rh/sl*100:null;});
+    if(c.k==="sales"||c.k==="seat")return st.exp.map((v,i)=>{const sl=salesAt(d,i,v);if(sl==null)return null;return c.k==="sales"?sl:(seatTotal()?sl/seatTotal():null);});
+    return st.exp.map(v=>M(v,d,c.k));};
+  const cols=DAYS.map((d,j)=>S[j].list.length?colFor(d,S[j]):HOURS.map(()=>null));
+  const fm=x=>x==null?"–":c.k==="wait"?String(x):c.k==="tc"?String(Math.round(x)):c.k==="apt"?"₱"+Math.round(x):c.k==="rent"?(x>99?">99%":(x>=10?Math.round(x):x.toFixed(1))+"%"):fmtM(x,c.k);
+  const full=x=>x==null?"–":c.k==="sales"||c.k==="seat"||c.k==="apt"?"₱"+Math.round(x).toLocaleString("en-US"):c.k==="turn"?x.toFixed(2)+" guests per seat":c.k==="rent"?x.toFixed(1)+"% of sales":c.k==="seatuse"?Math.round(x)+"% of "+seatTotal()+" seats":fm(x)+(c.u?" "+c.u:"");
+  const vals=cols.flat().filter(v=>v!=null);const max=vals.length?Math.max(...vals):0;
+  const warm=c.k==="rent"||c.k==="wait";const rgb=warm?"235,104,52":"42,120,214";
+  const g=$("rg");g.innerHTML="";
+  const div=(cls,t)=>{const e=document.createElement("div");e.className=cls;if(t!=null)e.textContent=t;g.appendChild(e);return e;};
+  div("",null);DAYS.forEach(d=>div("hh",d.slice(0,3)));
+  let best=null;
+  HOURS.forEach((_,i)=>{div("hl",hl(i));
+    DAYS.forEach((d,j)=>{const x=cols[j][i],e=div("cc",null);
+      if(x==null){e.textContent="–";e.style.color="var(--muted)";return;}
+      if(!best||x>best.v)best={v:x,j,i};
+      const t=.08+.92*(max>0?(warm&&c.k==="rent"?Math.min(x,30)/30:x/max):0);
+      e.style.background=`rgba(${rgb},${t.toFixed(2)})`;e.style.color=t>.5?"#fff":"var(--fg)";
+      e.textContent=fm(x);
+      const lost=c.k==="wait"?S[j].left[i]:0;if(lost){const sm=document.createElement("small");sm.textContent=lost+" left";e.appendChild(sm);}
+      e.tabIndex=0;
+      const show=()=>{const st=S[j],v=st.exp[i],sl=salesAt(d,i,v);const bits=[`${d.slice(0,3)} ${hl(i)}–${hl(i+1)} · ${c.t}: ${full(x)}`];
+        if(v!=null)bits.push(`${v} guests expected`);if(sl!=null)bits.push("₱"+Math.round(sl).toLocaleString("en-US")+" sales");
+        if(st.tc[i]!=null)bits.push(Math.round(st.tc[i])+" TC");if(v!=null)bits.push(servers(v)+" servers",seatUse(v)+"% seats");
+        if(st.waited[i])bits.push(`${st.waited[i]} waited, ${st.left[i]} left`);$("rdet").textContent=bits.join(" · ");};
+      e.onmouseenter=e.onclick=e.onfocus=show;});});
+  const tl=c.k==="srv"||c.k==="seatuse"?"Peak":c.k==="apt"||c.k==="rent"?"Day avg":"Day total";
+  div("hl dd",tl);
+  DAYS.forEach((d,j)=>{const st=S[j],col=cols[j];let a=null;
+    if(st.list.length){const daySales=st.exp.reduce((acc,v,i)=>acc+(salesAt(d,i,v)||0),0),dayTc=st.tc.reduce((acc,v)=>acc+(v||0),0);
+      a=c.k==="wait"?(col.reduce((x,y)=>x+(y||0),0)||null):c.k==="tc"?(dayTc||null):c.k==="apt"?(dayTc?daySales/dayTc:null):c.k==="rent"?(rh!=null&&daySales?rh*HOURS.length/daySales*100:null):aggM(col,c.k);}
+    div("dd",fm(a));});
+  const sw=t=>`<i style="background:rgba(${rgb},${t})"></i>`;
+  $("rlg").innerHTML=`<span>${c.k==="rent"?"Low rent share":"Low"}</span>${sw(.1)}${sw(.35)}${sw(.6)}${sw(.8)}${sw(1)}<span>${c.k==="rent"?"30% or more":"High"}</span>`;
+  const why=c.k==="tc"||c.k==="apt"?"Log transactions (TC) per hour in Edit data to see this view.":c.k==="rent"?"Enter floor area and rent per sqm in Edit data → Settings to see this view.":c.k==="sales"||c.k==="seat"?"Add monthly sales in Edit data to see this view.":"Log hourly guest counts in Edit data to see this view.";
+  $("rdet").textContent=best?`Busiest slot: ${DAYS[best.j].slice(0,3)} ${hl(best.i)}–${hl(best.i+1)} (${full(best.v)}). Tap or hover a cell for details.`:why;
+  const wk=DAYS.map(d=>forecast(d));const gcW=wk.reduce((x,f)=>x+(f.gc||0),0),slW=wk.reduce((x,f)=>x+(f.sales||0),0);
+  const lostT=S.reduce((x,st)=>x+st.left.reduce((p,q)=>p+q,0),0),waitT=S.reduce((x,st)=>x+st.waited.reduce((p,q)=>p+q,0),0);
+  const mk=Object.keys(months).sort().pop();const dates=Object.values(entries).map(e=>e.date).sort();const have=DAYS.filter((d,j)=>S[j].list.length);
+  const lines=[];
+  if(slW)lines.push(`<b>₱${Math.round(slW).toLocaleString("en-US")}</b> sales a week · <b>${gcW.toLocaleString("en-US")}</b> guests · avg check <b>₱${Math.round(slW/gcW)}</b>${mk?" ("+mLabel(mk)+" averages)":""}`);
+  if(slW)lines.push(`about <b>₱${Math.round(slW*52/12).toLocaleString("en-US")}</b> sales a month · <b>₱${Math.round(slW/seatTotal()).toLocaleString("en-US")}</b> per seat a week`);
+  const rm=rentMonth();if(rm!=null)lines.push(`rent <b>₱${Math.round(rm).toLocaleString("en-US")}</b> a month${slW?` (<b>${(rm/(slW*52/12)*100).toFixed(1)}%</b> of sales)`:""}${settings.sqm&&slW?` · ₱${Math.round(slW*52/12/settings.sqm).toLocaleString("en-US")} sales per sqm a month`:""}`);
+  if(waitT)lines.push(`<b>${waitT}</b> guests waited, <b>${lostT}</b> walked out${(()=>{const ck=slW&&gcW?slW/gcW:null;return ck?` (about ₱${Math.round(lostT*ck).toLocaleString("en-US")} lost)`:"";})()}`);
+  lines.push(`${seatTotal()} seats · 1 server per ${settings.std} guests · hourly data: ${dates.length?dates.map(fmtDate).join(", ")+" ("+have.map(d=>d.slice(0,3)).join(", ")+")":"none yet"}`);
+  $("rst").innerHTML=lines.map(l=>`<div>${l}</div>`).join("");
+  renderCompare();
+}
+
+function entryCol(e,k){const d=dayOf(e.date),S=seatTotal(),rh=rentHour(),ck=dayCheck(d);
+  return HOURS.map((_,i)=>{const v=num(e.gc?.[i]),t=num(e.tc?.[i]);const sl=num(e.sales?.[i])??(v!=null&&ck!=null?v*ck:null);
+    switch(k){case "gc":return v;case "tc":return t;case "sales":return sl;case "seat":return sl!=null&&S?sl/S:null;
+      case "turn":return v!=null&&S?v/S:null;case "seatuse":return seatUse(v);case "srv":return v==null?null:servers(v);
+      case "apt":return t&&sl!=null?sl/t:null;case "rent":return rh!=null&&sl?rh/sl*100:null;
+      case "wait":return e.wHour===i?num(e.wGuests):null;}return null;});}
+function entryTotal(e,k){const col=entryCol(e,k);const v=col.filter(x=>x!=null);if(!v.length)return null;
+  if(k==="srv"||k==="seatuse")return Math.max(...v);
+  if(k==="apt"){const s=entryCol(e,"sales").reduce((a,b)=>a+(b||0),0),t=entryCol(e,"tc").reduce((a,b)=>a+(b||0),0);return t?s/t:null;}
+  if(k==="rent"){const s=entryCol(e,"sales").reduce((a,b)=>a+(b||0),0),rh=rentHour();return rh!=null&&s?rh*HOURS.length/s*100:null;}
+  return v.reduce((a,b)=>a+b,0);}
+function weekKey(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return isoLocal(d);}
+function cmpFmt(k,x){if(x==null)return "–";if(k==="wait"||k==="tc")return String(Math.round(x));if(k==="apt")return "₱"+Math.round(x);
+  if(k==="rent")return (x>=10?Math.round(x):x.toFixed(1))+"%";return fmtM(x,k);}
+function chgCell(k,a,b){if(a==null||b==null)return '<td class="tot" style="color:var(--muted)">–</td>';
+  const diff=b-a,pct=a?Math.round(diff/a*100):null;const badUp=k==="rent"||k==="wait";const good=diff===0?null:(diff>0)!==badUp;
+  const col=good==null?"var(--muted)":good?"var(--ok)":"var(--bad)";
+  const dTxt=(diff>0?"+":diff<0?"−":"")+cmpFmt(k,Math.abs(diff));
+  return `<td class="tot" style="color:${col}">${dTxt}${pct!=null&&diff!==0?` <span style="font-size:11px">(${pct>0?"+":""}${pct}%)</span>`:""}</td>`;}
+function renderCompare(){
+  if(!$("cmode"))return;const mode=$("cmode").value;const k=$("rmetric").value||"gc";const kt=(RCATS.find(c=>c.k===k)||RCATS[0]).t;
+  let opts=[];
+  if(mode==="day")opts=Object.keys(entries).sort().map(d=>[d,`${fmtDate(d)} (${dayOf(d).slice(0,3)})`]);
+  else if(mode==="week"){const ws=[...new Set(Object.keys(entries).map(weekKey))].sort();opts=ws.map(w=>[w,"Week of "+fmtDate(w)]);}
+  else opts=Object.keys(months).sort().map(m=>[m,mLabel(m)]);
+  const fill=(id,want)=>{const el=$(id),cur=el.value;el.innerHTML=opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
+    el.value=opts.some(o=>o[0]===cur)&&cur?cur:want;};
+  fill("cA",opts.length>1?opts[opts.length-2][0]:opts[0]?.[0]||"");fill("cB",opts.length?opts[opts.length-1][0]:"");
+  const A=$("cA").value,B=$("cB").value;const t=$("ctbl");
+  if(opts.length<2){t.innerHTML="";$("cfind").textContent=mode==="month"?"Add a second month in Edit data → Monthly averages to compare.":`Log at least two ${mode==="day"?"dates":"weeks"} of hourly data to compare.`;$("cnote").textContent="";return;}
+  const lA=opts.find(o=>o[0]===A)?.[1]||A,lB=opts.find(o=>o[0]===B)?.[1]||B;
+  if(mode==="day"){const ea=entries[A],eb=entries[B];const ca=entryCol(ea,k),cb=entryCol(eb,k);
+    const all=[...ca,...cb].filter(v=>v!=null);const mx=all.length?Math.max(...all):0;
+    const cell=x=>{if(x==null)return '<td class="c" style="color:var(--muted)">–</td>';const tt=.08+.92*(mx?x/mx:0);return `<td class="c" style="background:rgba(42,120,214,${tt.toFixed(2)});color:${tt>.5?"#fff":"var(--fg)"}">${cmpFmt(k,x)}</td>`;};
+    let h=`<thead><tr><th class="h">Hour</th><th>${lA}</th><th>${lB}</th><th>Change</th></tr></thead><tbody>`;
+    HOURS.forEach((hr,i)=>{h+=`<tr><td class="h">${String(10+i).padStart(2,"0")}:00</td>${cell(ca[i])}${cell(cb[i])}${chgCell(k,ca[i],cb[i])}</tr>`;});
+    const ta=entryTotal(ea,k),tb=entryTotal(eb,k);
+    h+=`<tr><td class="h" style="color:var(--fg);font-weight:500">${k==="srv"||k==="seatuse"?"Peak":k==="apt"||k==="rent"?"Day avg":"Day total"}</td><td class="tot">${cmpFmt(k,ta)}</td><td class="tot">${cmpFmt(k,tb)}</td>${chgCell(k,ta,tb)}</tr></tbody>`;
+    t.innerHTML=h;
+    let big=null;HOURS.forEach((_,i)=>{if(ca[i]!=null&&cb[i]!=null){const dd=cb[i]-ca[i];if(!big||Math.abs(dd)>Math.abs(big.d))big={d:dd,i};}});
+    $("cfind").innerHTML=`${kt}: <b>${cmpFmt(k,ta)}</b> → <b>${cmpFmt(k,tb)}</b>`+(big&&big.d?`. Biggest change at <b>${String(10+big.i).padStart(2,"0")}:00</b> (${big.d>0?"+":"−"}${cmpFmt(k,Math.abs(big.d))}).`:".");
+    $("cnote").textContent=k==="sales"||k==="seat"||k==="apt"||k==="rent"?"Uses logged hourly sales when entered, otherwise guests × the day's average check.":"";}
+  else if(mode==="week"){const inW=w=>Object.values(entries).filter(e=>weekKey(e.date)===w);
+    const tot=w=>DAYS.map(d=>{const es=inW(w).filter(e=>dayOf(e.date)===d);if(!es.length)return null;return entryTotal(es[0],k);});
+    const ta=tot(A),tb=tot(B);const all=[...ta,...tb].filter(v=>v!=null);const mx=all.length?Math.max(...all):0;
+    const cell=x=>{if(x==null)return '<td class="c" style="color:var(--muted)">–</td>';const tt=.08+.92*(mx?x/mx:0);return `<td class="c" style="background:rgba(42,120,214,${tt.toFixed(2)});color:${tt>.5?"#fff":"var(--fg)"}">${cmpFmt(k,x)}</td>`;};
+    let h=`<thead><tr><th class="h">Day</th><th>${lA}</th><th>${lB}</th><th>Change</th></tr></thead><tbody>`;
+    DAYS.forEach((d,j)=>{h+=`<tr><td class="h">${d.slice(0,3)}</td>${cell(ta[j])}${cell(tb[j])}${chgCell(k,ta[j],tb[j])}</tr>`;});
+    const sum=arr=>{const v=arr.filter(x=>x!=null);if(!v.length)return null;return k==="srv"||k==="seatuse"?Math.max(...v):k==="apt"||k==="rent"?v.reduce((a,b)=>a+b,0)/v.length:v.reduce((a,b)=>a+b,0);};
+    const wa=sum(ta),wb=sum(tb);
+    h+=`<tr><td class="h" style="color:var(--fg);font-weight:500">Week</td><td class="tot">${cmpFmt(k,wa)}</td><td class="tot">${cmpFmt(k,wb)}</td>${chgCell(k,wa,wb)}</tr></tbody>`;
+    t.innerHTML=h;
+    const da=ta.filter(v=>v!=null).length,db=tb.filter(v=>v!=null).length;
+    $("cfind").innerHTML=`${kt} for the week: <b>${cmpFmt(k,wa)}</b> → <b>${cmpFmt(k,wb)}</b>.`;
+    $("cnote").textContent=`Each cell is that day's total. ${lA} has ${da} logged day${da===1?"":"s"}, ${lB} has ${db}. Log every day to compare full weeks.`;}
+  else{const ma=months[A],mb=months[B];
+    const row=(lab,fa,fb,kk)=>`<tr><td class="h">${lab}</td><td class="tot">${cmpFmt(kk,fa)}</td><td class="tot">${cmpFmt(kk,fb)}</td>${chgCell(kk,fa,fb)}</tr>`;
+    const g=(m,d,f)=>{const o=m?.days?.[d]||{};const sl=num(o.sales),gc=num(o.gc);return f==="sales"?sl:f==="gc"?gc:(sl!=null&&gc?sl/gc:null);};
+    let h=`<thead><tr><th class="h">Day</th><th>${lA}</th><th>${lB}</th><th>Change</th></tr></thead><tbody>`;
+    const sec=(title,f,kk)=>{h+=`<tr><td class="h" colspan="4" style="color:var(--fg);font-weight:600;padding-top:10px">${title}</td></tr>`;
+      DAYS.forEach(d=>{h+=row(d.slice(0,3),g(ma,d,f),g(mb,d,f),kk);});
+      const both=DAYS.filter(d=>g(ma,d,f)!=null&&g(mb,d,f)!=null);
+      const tot=m=>both.length?both.reduce((a,d)=>a+g(m,d,f),0):null;
+      if(f!=="chk")h+=`<tr><td class="h" style="color:var(--fg);font-weight:500">${both.length<7?"Same days":"Week"}</td><td class="tot">${cmpFmt(kk,tot(ma))}</td><td class="tot">${cmpFmt(kk,tot(mb))}</td>${chgCell(kk,tot(ma),tot(mb))}</tr>`;};
+    sec("Average sales per day","sales","sales");sec("Average guests per day","gc","gc");sec("Average check per guest","chk","apt");
+    t.innerHTML=h+"</tbody>";
+    const bothS=DAYS.filter(d=>g(ma,d,"sales")!=null&&g(mb,d,"sales")!=null);const sw=m=>bothS.reduce((a,d)=>a+g(m,d,"sales"),0);
+    const p=sw(ma)?Math.round((sw(mb)-sw(ma))/sw(ma)*100):null;
+    $("cfind").innerHTML=`Sales on the ${bothS.length} days both months have: <b>₱${Math.round(sw(ma)/1000)}k</b> → <b>₱${Math.round(sw(mb)/1000)}k</b>${p!=null?` (${p>0?"+":""}${p}%)`:""}.`+(bothS.length<7?` Days missing in either month show – and are left out of the totals.`:"");
+    $("cnote").textContent="Monthly averages from Edit data → Monthly averages.";}
+}
+["cmode","cA","cB"].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener("change",()=>{if(id==="cmode"){$("cA").innerHTML="";$("cB").innerHTML="";}renderCompare();});});
+function render(){renderDays();renderDay();renderWeek();renderMonths();renderDeploy();renderReport();}
+
+function buildForm(){
+  $("fhours").innerHTML='<div class="scroll"><table class="crew"><thead><tr><th class="h">Hour</th><th>Guests (pax)</th><th>Transactions (TC)</th><th>Sales ₱</th></tr></thead><tbody>'+HOURS.map((h,i)=>`<tr><td class="h">${h}</td><td><input id="g${i}" type="number" min="0" step="1" inputmode="numeric" style="width:76px" aria-label="${h} guests"></td><td><input id="t${i}" type="number" min="0" step="1" inputmode="numeric" style="width:76px" aria-label="${h} transactions"></td><td><input id="sl${i}" type="number" min="0" step="1" inputmode="numeric" style="width:96px" aria-label="${h} sales"></td></tr>`).join("")+'</tbody></table></div><p class="sub" style="margin:0">TC and sales are optional. With them, the report uses real sales and shows average per transaction.</p>';
+  $("wh").innerHTML='<option value="">No wait</option>'+HOURS.map((h,i)=>`<option value="${i}">${h}</option>`).join("");
+}
+function clearForm(){editing=null;$("f").reset();$("formttl").textContent="Add a day";$("del").hidden=true;$("delyes").hidden=true;$("fday").textContent="";$("fmsg").textContent="";}
+function loadForm(date){const e=entries[date];if(!e)return;editing=date;$("fdate").value=e.date;$("fday").textContent=dayOf(e.date);
+  HOURS.forEach((_,i)=>{const v=num(e.gc?.[i]),t=num(e.tc?.[i]),x=num(e.sales?.[i]);$("g"+i).value=v==null?"":v;$("t"+i).value=t==null?"":t;$("sl"+i).value=x==null?"":x;});
+  $("wh").value=e.wHour==null?"":String(e.wHour);$("wp").value=e.wParties??"";$("wg").value=e.wGuests??"";$("ws").value=e.wSeated??"";$("fnote").value=e.note||"";
+  $("formttl").textContent="Edit "+fmtDate(date);$("del").hidden=false;$("delyes").hidden=true;$("fmsg").textContent="";
+  $("formttl").scrollIntoView({behavior:"smooth",block:"start"});}
+function readNum(id){const v=$(id).value.trim();if(v==="")return null;const n=Number(v);return isFinite(n)&&n>=0?Math.round(n):NaN;}
+
+$("fdate").addEventListener("input",()=>{const d=dayOf($("fdate").value);$("fday").textContent=d||"";$("fmsg").textContent="";});
+$("clear").onclick=clearForm;
+$("del").onclick=()=>{$("delyes").hidden=false;$("fmsg").className="msg err";$("fmsg").textContent="Delete "+fmtDate(editing)+"? This can't be undone.";};
+$("delyes").onclick=async()=>{const d=editing;if(!d)return;
+  try{if(db)await db.collection("entries").doc(d).delete();delete entries[d];render();clearForm();$("fmsg").className="msg ok";$("fmsg").textContent="Deleted.";}
+  catch(e){$("fmsg").className="msg err";$("fmsg").textContent="Couldn't delete. Check your connection and try again.";}};
+
+$("f").addEventListener("submit",async ev=>{ev.preventDefault();const m=$("fmsg");m.className="msg err";
+  const date=$("fdate").value;if(!date||!dayOf(date)){m.textContent="Pick a date first.";$("fdate").focus();return;}
+  const gc=HOURS.map((_,i)=>readNum("g"+i)),tc=HOURS.map((_,i)=>readNum("t"+i)),sales=HOURS.map((_,i)=>readNum("sl"+i));
+  if([...gc,...tc,...sales].some(v=>Number.isNaN(v))){m.textContent="Guests, transactions and sales must be numbers, 0 or more.";return;}
+  if(gc.every(v=>v==null)){m.textContent="Enter at least one hourly guest count.";return;}
+  const wHour=$("wh").value===""?null:Number($("wh").value);const wParties=readNum("wp"),wGuests=readNum("wg"),wSeated=readNum("ws");
+  if([wParties,wGuests,wSeated].some(v=>Number.isNaN(v))){m.textContent="Waiting numbers must be whole numbers, 0 or more.";return;}
+  if(wHour!=null&&(wParties==null||wGuests==null||wSeated==null)){m.textContent="Fill parties waited, guests waited and parties seated for the wait.";return;}
+  if(wHour!=null&&wSeated>wParties){m.textContent="Parties seated can't be more than parties waited.";return;}
+  const body={date,gc,tc,sales,wHour,wParties:wHour==null?null:wParties,wGuests:wHour==null?null:wGuests,wSeated:wHour==null?null:wSeated,note:$("fnote").value.trim()};
+  $("save").disabled=true;
+  try{if(db){await db.collection("entries").doc(date).set(body);if(editing&&editing!==date)await db.collection("entries").doc(editing).delete();}
+    if(editing&&editing!==date)delete entries[editing];entries[date]=body;day=dayOf(date);render();clearForm();
+    m.className="msg ok";m.textContent=db?"Saved "+fmtDate(date)+" ("+day+") in this browser.":"Added for this visit only. Saving isn't available here.";}
+  catch(e){m.textContent=e&&e.code==="invalid_argument"?"You can view this page but not change it.":"Couldn't save. Check your connection and try again.";}
+  finally{$("save").disabled=false;}});
+
+let setTimer=null;
+function rentMonth(){return settings.sqm>0&&settings.rent>0?settings.sqm*settings.rent:null;}
+function rentHour(){const r=rentMonth();return r==null?null:r/(HOURS.length*365/12);}
+function showRent(){const r=rentMonth();$("rentTotal").textContent=r==null?"–":"₱"+Math.round(r).toLocaleString("en-US");}
+function applySettings(v){const se=v.seats||{main:38,mall:10,garden:32};settings={std:v.std,dine:v.dine,seats:se,sqm:v.sqm??null,rent:v.rent??null};$("sqm").value=settings.sqm??"";$("rent").value=settings.rent??"";showRent();$("std").value=v.std;$("dine").value=v.dine;$("seatMain").value=se.main;$("seatMall").value=se.mall;$("seatGarden").value=se.garden;$("seatTotal").textContent=(se.main||0)+(se.mall||0)+(se.garden||0);render();}
+function onSetting(){const s=Number($("std").value),d=Number($("dine").value);const sm=Number($("seatMain").value)||0,sl=Number($("seatMall").value)||0,sg=Number($("seatGarden").value)||0;
+  if(!(s>=1)||!(d>0)||sm<0||sl<0||sg<0){$("setmsg").className="msg err";$("setmsg").textContent="Use numbers above 0.";return;}
+  $("seatTotal").textContent=sm+sl+sg;
+  const sq=$("sqm").value===""?null:Number($("sqm").value),rn=$("rent").value===""?null:Number($("rent").value);
+  $("setmsg").textContent="";settings={std:s,dine:d,seats:{main:sm,mall:sl,garden:sg},sqm:sq,rent:rn};showRent();render();clearTimeout(setTimer);
+  setTimer=setTimeout(async()=>{if(!db)return;try{await db.doc("settings/main").set(settings);}catch(e){$("setmsg").className="msg err";$("setmsg").textContent="Settings not saved.";}},700);}
+["std","dine","seatMain","seatMall","seatGarden","sqm","rent"].forEach(id=>$(id).addEventListener("input",onSetting));
+
+buildForm();buildMonthForm();render();renderCrew();
+(function(){let v="report";try{v=localStorage.getItem("ghm-view")||"report";}catch(e){}setView(v);})();
+const SEED={"entries": {"2026-10-10": {"date": "2026-10-10", "gc": [6, 31, 46, 40, 16, 27, 54, 35, 49, 59, 29, 2], "wHour": null, "wParties": null, "wGuests": null, "wSeated": null, "note": ""}, "2026-10-17": {"date": "2026-10-17", "gc": [18, 26, 36, 49, 40, 40, 46, 34, 35, 48, 21, 3], "wHour": 9, "wParties": 11, "wGuests": 39, "wSeated": 6, "note": "Wait hour assumed 7-8 PM (not recorded). Empty tables during the wait."}}, "months": {"2026-10": {"month": "2026-10", "note": "From the October log.", "days": {"Monday": {"sales": 144000, "gc": 194, "c1": 24, "c2": 76}, "Tuesday": {"sales": 176000, "gc": 182, "c1": 33, "c2": 67}, "Wednesday": {"sales": 161000, "gc": 176, "c1": 27, "c2": 73}, "Thursday": {"sales": 187000, "gc": 249, "c1": 31, "c2": 69}, "Friday": {"sales": 206000, "gc": 298, "c1": 30, "c2": 70}, "Saturday": {"sales": 293000, "gc": 440, "c1": 23, "c2": 77}, "Sunday": {"sales": 303000, "gc": 460, "c1": 19, "c2": 81}}}, "2026-09": {"month": "2026-09", "note": "From the September log (gross as sales). Monday GC and Sunday not recorded.", "days": {"Monday": {"sales": 143000, "gc": null, "c1": null, "c2": null}, "Tuesday": {"sales": 164000, "gc": 203, "c1": null, "c2": null}, "Wednesday": {"sales": 168000, "gc": 226, "c1": null, "c2": null}, "Thursday": {"sales": 166000, "gc": 216, "c1": null, "c2": null}, "Friday": {"sales": 204000, "gc": 280, "c1": null, "c2": null}, "Saturday": {"sales": 284000, "gc": 417, "c1": null, "c2": null}, "Sunday": {"sales": null, "gc": null, "c1": null, "c2": null}}}}, "deploy": {"2026-10-24": {"date": "2026-10-24", "staff": [{"name": "Store Manager", "pos": "MOD", "status": "Regular", "buddy": "", "area": "All areas", "start": "", "end": ""}, {"name": "Manager / Host", "pos": "Host", "status": "Regular", "buddy": "", "area": "All areas", "start": "", "end": ""}, {"name": "Food Dispatcher", "pos": "Counter", "status": "Regular", "buddy": "", "area": "All areas", "start": "", "end": ""}, {"name": "Server 1", "pos": "Server", "status": "Regular", "buddy": "", "area": "Area 1", "start": "", "end": ""}, {"name": "Trainee 1", "pos": "Server", "status": "Trainee", "buddy": "Server 1", "area": "Area 1", "start": "", "end": ""}, {"name": "Trainee 2", "pos": "Server", "status": "Trainee", "buddy": "Server 1", "area": "Area 3", "start": "", "end": ""}, {"name": "Busser 1", "pos": "Busser", "status": "Regular", "buddy": "", "area": "Area 1", "start": "", "end": ""}, {"name": "Busser 2", "pos": "Busser", "status": "Regular", "buddy": "", "area": "Area 3", "start": "", "end": ""}, {"name": "Cashier 1", "pos": "Cashier", "status": "Regular", "buddy": "", "area": "All areas", "start": "", "end": ""}, {"name": "Cashier 2", "pos": "Cashier", "status": "Regular", "buddy": "", "area": "All areas", "start": "", "end": ""}]}}, "settings": {"main": {"std": 15, "dine": 1, "seats": {"main": 38, "mall": 10, "garden": 32}}}};
+const KEY="guest-heatmap-v2";
+function loadStore(){try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&v.entries)return v;}catch(e){}return JSON.parse(JSON.stringify(SEED));}
+let store=loadStore();
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+function docRef(c,id){return{set:async b=>{(store[c]=store[c]||{})[id]=JSON.parse(JSON.stringify(b));persist();},delete:async()=>{if(store[c])delete store[c][id];persist();},
+  onSnapshot:fn=>{const v=store[c]?.[id];fn({exists:!!v,data:()=>v});}};}
+function coll(c){return{doc:id=>docRef(c,id),onSnapshot:fn=>fn({docs:Object.keys(store[c]||{}).map(id=>({id,data:()=>store[c][id]}))})};}
+db={collection:coll,doc:p=>{const [c,id]=p.split("/");return docRef(c,id);}};
+db.collection("entries").onSnapshot(snap=>{const n={};snap.docs.forEach(d=>{const v=d.data();if(v&&v.date)n[d.id]=v;});entries=n;});
+db.collection("months").onSnapshot(snap=>{const n={};snap.docs.forEach(d=>{const v=d.data();if(v&&v.days)n[d.id]=v;});months=n;});
+db.collection("deploy").onSnapshot(snap=>{const n={};snap.docs.forEach(d=>{const v=d.data();if(v&&v.date)n[d.id]=v;});deploys=n;});
+db.doc("settings/main").onSnapshot(s=>{const v=s.exists?s.data():null;if(v&&v.std&&v.dine)applySettings(v);});
+crew=JSON.parse(JSON.stringify(deploys[dDate]?.staff||[]));renderCrew();render();
+</script>
+
+</body>
+</html>
